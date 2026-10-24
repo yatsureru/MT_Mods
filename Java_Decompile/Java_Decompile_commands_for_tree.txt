@@ -1,0 +1,36 @@
+$root = "C:\Users\Choux\Desktop\MT_Mods\Java_Decompile"
+$out  = "$root\tree.md"
+
+$exclude = @(".git", "node_modules", "build", "dist", ".idea", ".vscode", "__pycache__")
+
+$fence = [string]::new([char]0x60, 3)   # три backtick'а без парсерных проблем
+
+function Show-Tree {
+    param([string]$Path, [string]$Indent = "", [string[]]$Exclude)
+    $items = Get-ChildItem -LiteralPath $Path |
+        Where-Object {
+            $name = $_.Name
+            -not ($Exclude -contains $name) -and
+            ($_.PSIsContainer -or $_.Extension -match '^\.(lua|txt|xml|json|ini|md|info|png|java)$')
+        } |
+        Sort-Object { -not $_.PSIsContainer }, Name
+
+    for ($i = 0; $i -lt $items.Count; $i++) {
+        $item = $items[$i]
+        $last = ($i -eq $items.Count - 1)
+        $branch = if ($last) { "└── " } else { "├── " }
+        $nextIndent = if ($last) { "$Indent    " } else { "$Indent│   " }
+
+        Write-Output "$Indent$branch$($item.Name)"
+
+        if ($item.PSIsContainer) {
+            Show-Tree -Path $item.FullName -Indent $nextIndent -Exclude $Exclude
+        }
+    }
+}
+
+$fence | Set-Content -LiteralPath $out -Encoding UTF8
+Show-Tree -Path $root -Exclude $exclude | Add-Content -LiteralPath $out -Encoding UTF8
+$fence | Add-Content -LiteralPath $out -Encoding UTF8
+
+Write-Host "Готово: $out"
