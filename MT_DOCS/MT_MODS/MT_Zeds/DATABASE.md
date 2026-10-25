@@ -13,7 +13,7 @@
 
 **Стек:** Java-патчи (ZombieBuddy).
 
-## 2. Провалы и ограничения
+## 2. Провалы, ограничения и непроверенные варианты
 
 ### 2.1. `ZombieGroupManager.shouldBeInGroup` через `isAdvice=false` — ПРОВАЛ
 **Что пробовали:**
@@ -33,6 +33,38 @@ public class Patch_ZombieGroupManager {
 
 ### 2.3. `@Patch.Replace` отсутствует
 См. `MT_03_KNOWLEDGE` §2.2.
+
+### 2.4. Вариант B — runtime-флаг `Core` — ПРОТЕСТИРОВАТЬ КАК ВОЗМОЖНЫЙ ВЫХОД
+
+**Это не зафиксированный провал**, а альтернативный путь, который ещё не проверялся в игре.
+
+`ZombieGroupManager.shouldBeInGroup()` проверяет флаг `Core`:
+
+```java
+if (!Core.getInstance().isZombieGroupSound()) {
+    return false;
+}
+```
+`Java_Decompile/zombie/ai/ZombieGroupManager.java:69`
+
+`Core` добавлен в Lua-exposer (`Java_Decompile/zombie/Lua/LuaManager.java:1862`), `getCore()` — глобальная Lua-функция (`LuaManager.java:6287–6288`). Возможный runtime-выключатель:
+
+```lua
+getCore():setZombieGroupSound(false)
+print(getCore():isZombieGroupSound()) -- ожидается false
+```
+
+Флаг по умолчанию `true` (`Core.java:331`), единственная ванильная запись `true` — в `IngameState.exit` (`IngameState.java:1014`). Поэтому выставлять его нужно при `OnGameStart`; после выхода из игры/нового входа флаг может сброситься.
+
+**Ожидание:** существующие группы распадутся через `ZombieGroup.update()` (`ZombieGroup.java:72`), новые создаваться не будут. Сам менеджер продолжит тикать, но группового AI и rally-поведения не будет.
+
+**Что проверить:**
+- [ ] метод `setZombieGroupSound` реально доступен из Lua (Kahlua);
+- [ ] `regrouped` падает до ~0;
+- [ ] нет побочных эффектов на звук/остальной AI;
+- [ ] флаг не сбрасывается при новой игре/перезагрузке.
+
+`[?]` Не тестировано. Если Lua-метод недоступен — fallback на Java-патч `shouldBeInGroup` через advice, **не** через `isAdvice=false`.
 
 ## 3. Что работает (смягчение)
 
@@ -86,11 +118,12 @@ if (g != null) {
 
 - **`isRemoteZombie()`** ломается с `PZ_Optimization` (см. `MT_03_KNOWLEDGE` §2.3).
 - **Race condition** на статических `int++` и перезаписи массивов игроков (см. §3.3).
-- **`ZombieGroupManager` не отключается** через `isAdvice=false` (см. §2).
+- **`ZombieGroupManager` не отключается** через `isAdvice=false` (см. §2). **Возможный выход:** runtime-флаг `Core.setZombieGroupSound(false)` — протестировать (см. §2.4).
 - **Гейт `stateEventDelayTimer > 0`** в `ZombieIdleState.execute` — ванильный `execute` сбрасывает таймер **до** нашего `OnExit`.
 - **`ZombieGroupManager.update()`** в конце `IsoZombie.update()` (~3506) — если зомби в `Idle`, менеджер тянет к лидеру.
 
 ## 6. Открытые вопросы
 - [?] Как отключить ванильный `ZombieGroupManager` без `isAdvice=false`? (в приоритете)
+  - [?] Протестировать `getCore():setZombieGroupSound(false)` как возможный выход (см. §2.4).
 - [?] Свой Merge параллельно с ванильным — не будет ли конфликта?
 - [?] Как синхронизировать `WZ_Role` в MP без лагов?

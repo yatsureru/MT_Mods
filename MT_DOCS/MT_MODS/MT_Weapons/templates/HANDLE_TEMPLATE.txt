@@ -1,0 +1,144 @@
+/* ================================================================
+   MT WEAPONS — HANDLE TEMPLATE
+   ================================================================
+
+   Save the item part to:
+       media/scripts/<Category>/<HandleItem>.txt
+
+   Save the model part to:
+       media/scripts/<Category>/<HandleItem>_Attachments.txt
+
+   Same module, two files: the item script stays readable, and the
+   handle model owns every attachment point used by blades and the
+   left hand.
+
+   Naming:
+       <Category>   Katana / Knife / OneHandAxe / Axe
+       <HandleItem> MT_Katana_Nightblaze, MT_Knife_M9, ...
+       <FamilyTag>  mtmw:katana / mtmw:knife / mtmw:onehandaxe / mtmw:axe
+
+   Vanilla tags (base:...) are intentionally NOT included yet.
+   The final vanilla tag set is still TBD; do not copy old tags blindly.
+
+   The handle alone does no damage. Every blade adds damage through
+   DamageModifier. Keep MinDamage/MaxDamage at 0.0 here.
+   ================================================================ */
+
+module Base
+{
+    item <HandleItem>
+    {
+        /* General */
+        DisplayCategory             = Weapon,
+        ItemType                    = base:weapon,
+        KnockBackOnNoDeath          = TRUE,
+        SplatBloodOnNoDeath         = TRUE,
+        TwoHandWeapon               = TRUE,
+
+        /* Categories */
+        Categories                  = base:longblade,
+        SubCategory                 = Swinging,
+        Tags                        = mtmw:handle;<FamilyTag>,
+
+        /* Damage: handle only. Blades add the real damage. */
+        MinDamage                   = 0.0,
+        MaxDamage                   = 0.0,
+        DoorDamage                  = 1,
+        TreeDamage                  = 1,
+        CriticalChance              = 25.0,
+        CritDmgMultiplier           = 5.0,
+        WeaponLength                = 0.4,
+        DamageCategory              = Slash,
+        DamageMakeHole              = TRUE,
+
+        /* Modifiers */
+        BaseSpeed                   = 1.0,
+        EnduranceMod                = 0.5,
+        MinRange                    = 0.61,
+        MaxRange                    = 1.5,
+        MinAngle                    = 0.8,
+        HitAngleMod                 = -30.0,
+        MinimumSwingTime            = 3.0,
+        SwingTime                   = 3.0,
+        SwingAmountBeforeImpact     = 0.02,
+        MaxHitCount                 = 3,
+        ConditionLowerChanceOneIn   = 15,
+        ConditionMax                = 20,
+        SplatNumber                 = 4,
+        AimingMod                   = 0.8,
+        PushBackMod                 = 0.5,
+        MetalValue                  = 50,
+        KnockdownMod                = 0.0,
+        Sharpness                   = 1.0,
+
+        /* Animation. Adjust per category. */
+        IdleAnim                    = Idle_Weapon2,
+        RunAnim                     = Run_Weapon2,
+        SwingAnim                   = Bat,
+
+        /* Sound. Adjust per category. */
+        DoorHitSound                = KatanaHit,
+        HitSound                    = KatanaHit,
+        HitFloorSound               = KatanaHit,
+        ImpactSound                 = KatanaHit,
+        SwingSound                  = KatanaSwing,
+        BreakSound                  = KatanaBreak,
+        DropSound                   = KatanaDrop,
+
+        /* Unique */
+        Icon                        = <HandleItem>,
+        WeaponSprite                = <HandleItem>,
+        DisplayName                 = <HandleItem>,
+        AttachmentType              = Sword,
+        WorldStaticModel            = <HandleItem>,
+        Weight                      = 2.0,
+
+        /* Visual link for every compatible blade item.
+           Token 1: blade item full type.
+           Token 2: model script for THIS handle (one per handle).
+           Token 3: none (the blade has no self attachment yet).
+           Token 4: parent attachment point on the handle.
+
+           Add one ModelWeaponPart line per blade item. If a blade
+           item is listed in MountOn but has no line here, it will
+           attach logically and render no blade model. */
+        ModelWeaponPart             = Base.<BladeItem> Base.<BladeModelForThisHandle> none Blade,
+    }
+}
+
+/* ================================================================
+   HANDLE MODEL
+   ================================================================ */
+
+module Base
+{
+    model <HandleItem>
+    {
+        mesh                        = <Category>/<HandleItem>,
+        texture                     = <Category>/<HandleItem>,
+
+        /* Root point for world/inventory placement. */
+        attachment world
+        {
+            offset = 0.0 0.0 0.0,
+            rotate = 0.0 0.0 0.0,
+        }
+
+        /* Blade joint. ModelWeaponPart uses this name as the parent
+           attachment. Keep zero while the blade is authored in the
+           handle's local frame; use offset only as an alternative.
+           Do not apply both at once. */
+        attachment Blade
+        {
+            offset = 0.0 0.0 0.0,
+            rotate = 0.0 0.0 0.0,
+        }
+
+        /* Left-hand grip on the handle, not on the blade. */
+        attachment Bip01_Prop2
+        {
+            offset = 0.0 0.0 0.0,
+            rotate = 0.0 0.0 0.0,
+        }
+    }
+}

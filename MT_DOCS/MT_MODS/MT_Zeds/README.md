@@ -59,5 +59,6 @@
 ## 3. Статус
 - [x] Фундамент (`ZombieIdleState.execute` + очистка `z.group`).
 - [!] **Заморожено:** ванильный `ZombieGroupManager` не отключается через `isAdvice = false` (см. `DATABASE` §2). `regrouped` 58–76%.
+- [?] **Протестировать как возможный выход:** runtime-флаг `getCore():setZombieGroupSound(false)` — гейтит `ZombieGroupManager.shouldBeInGroup()` (`ZombieGroupManager.java:69`), см. `DATABASE` §2.4.
 - [?] **Обдумать:** свой Merge параллельно с ванильным, либо всё же отключить ванильный (в приоритете).
 - [ ] Этап 1: роли.

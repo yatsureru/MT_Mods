@@ -43,6 +43,12 @@
 | XML загружен, маска применяется, но играется ванильная стойка | `MT_02_RULES` §1.10 (имя Action в FBX) |
 | Кисть выворачивается при кастомной анимации | `MT_02_RULES` §1.10 (2 кости пальцев, симметрия) |
 | Стойка «слетает» при ходьбе | `MT_02_RULES` §1.10 (`isCurrentActionPathfinding`) |
+| Стойка играет на ручке без лезвия | `MT_MODS/MT_Weapons/DATABASE` §2.1–2.3 (`WeaponState.isComplete` + кэш) |
+| Лезвие не появилось в руке после установки | §2.9 (`ModelWeaponPart`, `attachment Blade`, `resetEquippedHandsModels`) |
+| Лезвие огромное и улетело от руки | §2.9 (двойной mesh transform; обнулить node transform ребёнка) |
+| В контекстном меню нет лезвия из сумки | §2.9 (`getItemsFromCategory` без рекурсии; `getAllCategoryRecurse`) |
+| После attach/detach модель обновилась только после переэкипировки (SP) | §2.9 (`ISUpgradeWeapon` не сбрасывает модель) |
+| `NPE ScriptManager.getItemName ... name is null` при экипировке оружия | §2.9 (`HandWeapon` без `WeaponSprite`) |
 
 ### 1.4. Зомби и AI
 
@@ -141,6 +147,22 @@
 **Факт:** `cb:getValue()` возвращает **индекс** (1, 2, 3...), не текст. Заполнение: `local cb = options:addComboBox(...)`, затем `cb:addItem(name, isDefault)` в цикле. Разделители — `options:addTitle(text)`; `options:addSeparator()` рисует линию.
 
 **Применение:** все `ModOptions`-меню (`MT_Weapons`, `MT_SmartWatch`).
+
+### 2.9. Нативные `WeaponPart` работают для мили-оружия
+
+**Факт:** в B42 лезвие мили-оружия можно хранить как нативный `WeaponPart`:
+1. `PartType` — **свободная строка** (`WeaponPart.java:41`, `:174`), поэтому `PartType = Blade` валиден без отдельного enum. Enum `WeaponPartType` содержит только gun-части, но не ограничивает `PartType`.
+2. `ModelWeaponPart` парсится как 2–4 токена (`Item.java:2684–2720`): `<полный тип предмета> <model script> <self attachment> <parent attachment>`. Первый токен сравнивается с `part.getFullType()` (`ModelManager.java:824`), а не с `PartType`.
+3. Рендер: `ModelManager.addWeaponPartModels` добавляет модель части к модели оружия; `ItemModelRenderer` применяет сначала transform родительского attachment, затем собственного (`ItemModelRenderer.java:912–929`). `none` = `null`.
+4. `attachWeaponPart` добавляет `DamageModifier` части к `MinDamage`/`MaxDamage` (`HandWeapon.java:2073–2074`).
+5. Установка/снятие — нативные `ISUpgradeWeapon` / `ISRemoveWeaponUpgrade`; они MP-aware, но в SP не гарантируют немедленный `resetEquippedHandsModels()`. В MP получатель сбрасывает модель пакетом `SyncHandWeaponFieldsPacket.java:229`.
+6. `HandWeapon` рендерится по `WeaponSprite`, а не по `StaticModel`: `Item.InstanceItem` копирует только `weaponSprite` (`Item.java:2152`), `HandWeapon.getStaticModel()` (`HandWeapon.java:2256`) возвращает его. Если `WeaponSprite` пуст, `ModelManager.addEquippedModelInstance` передаёт null в `ScriptManager.getItemName` — NPE каждый кадр. Для `WeaponPart` и обычных предметов `StaticModel` работает через `InventoryItem.getStaticModel`.
+7. **Двойной mesh transform лезвия в руке.** `AnimatedModel.transformToParent` применяет mesh transform каждого дочернего инстанса (`AnimatedModel.java:1490`). Если у ручки и лезвия в FBX стоит `Lcl Scaling = 100`, рука получает 100× от ручки и ещё 100× от лезвия — итог 100×100, лезвие улетает. Инвентарный путь `ItemModelRenderer.initWeaponPart` (`ItemModelRenderer.java:565–610`) transform ребёнка не применяет, но transform ручки применяет. Для `ModelWeaponPart` нужна копия с **identity node transform и исходными вершинами**: тогда transform ручки применяется ровно один раз в обоих путях. Запекать transform в вершины нельзя — сверху всё равно применится transform ручки, и снова получится 100×100. Оригинал с node transform — для `WorldStaticModel`.
+8. **Ванильное меню апгрейда не рекурсивно.** `ISInventoryPaneContextMenu.lua:763` сканирует только `player:getInventory():getItemsFromCategory("WeaponPart")`. Для сумок и вложенных контейнеров нужен `getAllCategoryRecurse("WeaponPart", ArrayList.new())`; ванильную опцию `ContextMenu_Add_Weapon_Upgrade` можно расширить через `context:getOptionFromName(...):getSubMenu(...)`.
+
+**Применение:** `MT_Weapons` — вертикальный срез «ручка + лезвие». Полный контракт — `MT_MODS/MT_Weapons/DATABASE` §2, §3, §10.5.
+
+**Anti-pattern:** писать `ModelWeaponPart = Blade ...` (имя `PartType` вместо полного типа предмета) — модель части не найдётся. Для `HandWeapon` задавать только `StaticModel` без `WeaponSprite` — `getStaticModel()` вернёт null и игра упадёт в `ScriptManager.getItemName`. Подставлять в `ModelWeaponPart` оригинальный FBX с непустым node transform (`Lcl Scaling = 100`, `Lcl Rotation = 90`) — лезвие будет 100×100.
 
 ---
 
@@ -247,7 +269,7 @@ public class Patch_ZombieIdleState {
 
 **Anti-pattern:** полагаться на `primaryAnimMask` из скрипта предмета — игнорируется движком для `HandWeapon`.
 
-**Источник:** `MT_Weapons` (`MT_MeleeStances_01_Data.lua` + `_03_Core.lua`).
+**Источник:** `MT_Weapons` (`MT_MeleeStances_Data.lua` + `Runtime/Resolver.lua` + `Runtime/LocalController.lua`).
 
 ### 3.6. Чтение репозитория мода по URL
 
@@ -261,6 +283,22 @@ public class Patch_ZombieIdleState {
 **Альтернативы:** web UI сам кодирует; `git clone` + локальное чтение; GitHub API `repos/{owner}/{repo}/git/trees/main?recursive=1` (возвращает пути в исходном виде).
 
 **Источник:** `MT_MODS/MT_SmartWatch/DATABASE` §3.6.
+
+### 3.7. Нативное лезвие для мили (вертикальный срез)
+
+**Задача:** добавить к ручке съёмное лезвие без своего ModData и без MFS.
+
+**Паттерн:**
+1. Лезвие — `ItemType = base:weaponpart`, `PartType = Blade`, `MountOn = Base.<ручка>`, `DamageModifier` для бонуса урона.
+2. На ручке — `ModelWeaponPart = Base.<лезвие> Base.<модель_лезвия_attached> none Blade`. Для `ModelWeaponPart` нужен FBX с identity node transform и **исходными** вершинами (не запекать transform в вершины); оригинал с `Lcl Scaling = 100` оставить для `WorldStaticModel`.
+3. В model script ручки — `attachment Blade { offset, rotate }` под меш лезвия.
+4. В model script лезвия — только `mesh` + `texture`, без attachment.
+5. После attach/detach в SP — `character:resetEquippedHandsModels()`.
+6. Гейт стойки — `WeaponState.isComplete(item)` (см. §2.9 и `MT_MODS/MT_Weapons/DATABASE` §2.2).
+
+**Anti-pattern:** `GunPos` per-instance для фиксированного лезвия — offset общий на model script, а не на предмет. Использовать один FBX и для `WorldStaticModel`, и для `ModelWeaponPart`, если у него непустой node transform.
+
+**Источник:** `MT_MODS/MT_Weapons/DATABASE` §3 + §10.5.
 
 ---
 

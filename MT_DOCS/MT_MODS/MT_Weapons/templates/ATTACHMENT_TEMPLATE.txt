@@ -1,0 +1,94 @@
+/* ================================================================
+   MT WEAPONS — ATTACHMENT TEMPLATE
+   ================================================================
+
+   Save the item part to:
+       media/scripts/Attachment/<PartType>/<Category>/<PartItem>.txt
+
+   Save the model part to:
+       media/scripts/Attachment/<PartType>/<Category>/<PartItem>_Attachments.txt
+
+   Example for a katana blade:
+       media/scripts/Attachment/Blade/Katana/<PartItem>.txt
+       media/scripts/Attachment/Blade/Katana/<PartItem>_Attachments.txt
+
+   Assets:
+       media/models_X/Attachment/<PartType>/<Category>/<PartItem>.fbx
+       media/textures/Attachment/<PartType>/<Category>/<PartItem>.png
+
+   One item script is shared by every handle of its category/tier.
+   The visual mesh/texture/offset for each handle is selected by that
+   handle's ModelWeaponPart line. Do not create one item per handle.
+
+   Vanilla tags on attachments are TBD. Do not add them yet.
+
+   A weaponpart is not a hand weapon. When detached and held as a
+   separate item it has no hand model: inventory shows only the icon,
+   and the world uses WorldStaticModel (GunCase_Ground). ModelWeaponPart
+   renders the part only while it is attached to a handle. This is
+   expected, not a missing-model bug.
+   ================================================================ */
+
+module Base
+{
+    item <PartItem>
+    {
+        DisplayCategory             = WeaponPart,
+        ItemType                    = base:weaponpart,
+        Weight                      = 1.0,
+        Icon                        = <PartItem>,
+        DisplayName                 = <PartItem>,
+
+        /* MountOn is ONE line. PZ resets the list on every MountOn key,
+           so a second MountOn line would overwrite the first.
+           List every handle of this category, separated by semicolons:
+           MountOn = Base.MT_Katana_Nightblaze;Base.MT_Katana_Yamato;... */
+        MountOn                     = Base.<HandleItem>,
+        PartType                    = Blade,
+        DamageModifier              = 2.0,
+        WeightModifier              = 1.0,
+
+        /* Tags on attachments: TBD. Vanilla tags are intentionally
+           not added yet. */
+
+        /* Attachments use a shared vanilla ground model to avoid a
+           unique world FBX per blade/handle variant. This is a world
+           model only, not a hand model. The in-hand look comes from
+           ModelWeaponPart while the part is attached to a handle. */
+        WorldStaticModel            = GunCase_Ground,
+    }
+}
+
+/* ================================================================
+   ATTACHMENT MODELS
+   ================================================================
+
+   One model per handle variant. Name it with the handle suffix,
+   not with an _Attached suffix. If there is only one variant, the
+   model may use the item name. The item's WorldStaticModel is
+   GunCase_Ground, so only the in-hand variant is needed.
+
+   The source FBX for each variant must keep the original vertices
+   and have an identity node transform:
+       Lcl Translation = 0,0,0
+       Lcl Rotation    = 0,0,0
+       Lcl Scaling     = 1,1,1
+
+   The handle transform is applied by the engine exactly once.
+
+   Example for a katana blade on two handles:
+       model MT_Attachment_Katana_Blade_T1_Nightblaze { ... }
+       model MT_Attachment_Katana_Blade_T1_Yamato     { ... }
+
+   The matching handle script must reference the model:
+       ModelWeaponPart = Base.<PartItem> Base.MT_Attachment_Katana_Blade_T1_Nightblaze none Blade,
+   ================================================================ */
+
+module Base
+{
+    model <PartItem>_<HandleSuffix>
+    {
+        mesh                        = Attachment/<PartType>/<Category>/<PartItem>_<HandleSuffix>,
+        texture                     = Attachment/<PartType>/<Category>/<PartItem>_<HandleSuffix>,
+    }
+}
